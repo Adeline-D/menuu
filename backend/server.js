@@ -5,6 +5,7 @@ const cors    = require("cors");
 const Groq    = require("groq-sdk");
 require("dotenv").config();
 
+
 const app = express();
 app.use(cors());
 app.use(express.json());
@@ -588,5 +589,11 @@ app.post("/decision", (req, res) => {
   res.json({ ok: true, decision, dish: { dishName, details: details || {} } });
 });
 
+// REPLACE your existing app.listen block with this:
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`Multilingual Menu Server v3 running on port ${PORT}`));
+if (process.env.NODE_ENV !== 'production') {
+  app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+}
+
+// Export the app for Vercel
+module.exports = app;
