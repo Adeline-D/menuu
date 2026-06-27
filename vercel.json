@@ -1,8 +1,8 @@
 {
   "rewrites": [
-    {
-      "source": "/(.*)",
-      "destination": "/index.html"
-    }
+   { "source": "/search", "destination": "/server.js" },
+    { "source": "/decision", "destination": "/server.js" },
+    { "source": "/suggest-all", "destination": "/server.js" },
+    { "source": "/(.*)", "destination": "/" }
   ]
 }
