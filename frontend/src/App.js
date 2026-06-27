@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import "./App.css";
 
-const API_BASE_URL = "http://127.0.0.1:5000";
+const API_BASE_URL = "";
 
 const fetchJson = async (url, options = {}) => {
   const controller = new AbortController();
