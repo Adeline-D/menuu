@@ -588,4 +588,5 @@ app.post("/decision", (req, res) => {
   res.json({ ok: true, decision, dish: { dishName, details: details || {} } });
 });
 
-app.listen(5000, () => console.log(" Multilingual Menu Server v3 running on port 5000"));
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, () => console.log(`Multilingual Menu Server v3 running on port ${PORT}`));
