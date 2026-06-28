@@ -1,0 +1,8 @@
+{
+  "version": 2,
+  "rewrites": [
+    { "source": "/search",      "destination": "/api/server" },
+    { "source": "/suggest-all", "destination": "/api/server" },
+    { "source": "/decision",    "destination": "/api/server" }
+  ]
+}
