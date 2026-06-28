@@ -5,6 +5,11 @@ const cors    = require("cors");
 const Groq    = require("groq-sdk");
 require("dotenv").config();
 
+// Node < 18 doesn't have fetch built-in; use node-fetch if available
+if (!globalThis.fetch) {
+  try { globalThis.fetch = require("node-fetch"); } catch (_) { /* Node 18+ has it */ }
+}
+
 
 const app = express();
 app.use(cors());
@@ -589,8 +594,10 @@ app.post("/decision", (req, res) => {
   res.json({ ok: true, decision, dish: { dishName, details: details || {} } });
 });
 
-// REPLACE your existing app.listen block with this:
+// ─── Local dev: listen on PORT; Vercel: export the app ────────────────────────
+if (require.main === module) {
+  const PORT = process.env.PORT || 5000;
+  app.listen(PORT, () => console.log(`✅ Server running on http://localhost:${PORT}`));
+}
 
-
-// Export the app for Vercel
 module.exports = app;
