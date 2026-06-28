@@ -2,15 +2,19 @@
   "version": 2,
   "builds": [
     {
-      "src": "api/server.js",
+      "src": "frontend/package.json",
+      "use": "@vercel/static-build",
+      "config": { "distDir": "build" }
+    },
+    {
+      "src": "server.js",
       "use": "@vercel/node"
     }
   ],
   "routes": [
-    { "src": "/api/(.*)",     "dest": "/api/server.js" },
-    { "src": "/search",       "dest": "/api/server.js" },
-    { "src": "/suggest-all",  "dest": "/api/server.js" },
-    { "src": "/decision",     "dest": "/api/server.js" },
-    { "src": "/(.*)",         "dest": "/index.html" }
+    { "src": "/search",      "dest": "/server.js" },
+    { "src": "/suggest-all", "dest": "/server.js" },
+    { "src": "/decision",    "dest": "/server.js" },
+    { "src": "/(.*)",        "dest": "/index.html" }
   ]
 }
