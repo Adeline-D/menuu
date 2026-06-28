@@ -1,7 +1,9 @@
 {
-  "rewrites": [
-    { "source": "/search",      "destination": "/api/server.js" },
-    { "source": "/suggest-all", "destination": "/api/server.js" },
-    { "source": "/decision",    "destination": "/api/server.js" }
+  "version": 2,
+  "routes": [
+    { "src": "/search",      "dest": "/api/server.js" },
+    { "src": "/suggest-all", "dest": "/api/server.js" },
+    { "src": "/decision",    "dest": "/api/server.js" },
+    { "src": "/(.*)",        "dest": "/frontend/build/index.html" }
   ]
 }
