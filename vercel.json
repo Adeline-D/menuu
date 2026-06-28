@@ -1,20 +1,7 @@
 {
-  "version": 2,
-  "builds": [
-    {
-      "src": "frontend/package.json",
-      "use": "@vercel/static-build",
-      "config": { "distDir": "build" }
-    },
-    {
-      "src": "server.js",
-      "use": "@vercel/node"
-    }
-  ],
-  "routes": [
-    { "src": "/search",      "dest": "/server.js" },
-    { "src": "/suggest-all", "dest": "/server.js" },
-    { "src": "/decision",    "dest": "/server.js" },
-    { "src": "/(.*)",        "dest": "/index.html" }
+  "rewrites": [
+    { "source": "/search",      "destination": "/api/server.js" },
+    { "source": "/suggest-all", "destination": "/api/server.js" },
+    { "source": "/decision",    "destination": "/api/server.js" }
   ]
 }
