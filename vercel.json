@@ -4,6 +4,6 @@
     { "src": "/search",      "dest": "/api/server.js" },
     { "src": "/suggest-all", "dest": "/api/server.js" },
     { "src": "/decision",    "dest": "/api/server.js" },
-    { "src": "/(.*)",        "dest": "/frontend/build/index.html" }
+    { "src": "/(.*)",        "dest": "/index.html" }
   ]
 }
