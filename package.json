@@ -10,11 +10,12 @@
     "@google/generative-ai": "^0.24.1",
     "node-fetch": "^2.7.0"
   },
-  "engines": {
-    "node": ">=18.x"
-  },
   "scripts": {
     "start": "node server.js",
-    "dev": "node server.js"
+    "dev": "node server.js",
+    "build": "cd frontend && npm install && npm run build"
+  },
+  "engines": {
+    "node": ">=18.x"
   }
 }
