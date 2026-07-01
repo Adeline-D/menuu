@@ -1,9 +1,9 @@
 {
   "version": 2,
   "rewrites": [
-    { "source": "/search",      "destination": "/api/server.js" },
-    { "source": "/suggest-all", "destination": "/api/server.js" },
-    { "source": "/decision",    "destination": "/api/server" },
-    { "source": "/(.*)",         "destination": "/frontend/build/$1"}
+    { "source": "/search",      "destination": "/frontend/api/server.js" },
+    { "source": "/suggest-all", "destination": "/frontend/api/server.js" },
+    { "source": "/decision",    "destination": "/frontend/api/server.js" },
+    { "source": "/(.*)",        "destination": "/frontend/build/$1" }
   ]
 }
