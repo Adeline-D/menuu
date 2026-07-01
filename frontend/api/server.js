@@ -727,7 +727,7 @@ app.post("/decision", (req, res) => {
 // Local dev: listen; Vercel: export
 if (require.main === module) {
   const PORT = process.env.PORT || 5000;
-  app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
-} else {
-  module.exports = app;
+  app.listen(PORT, () => console.log(`Server running on http://localhost:${PORT}`));
 }
+// Vercel serverless handler
+module.exports = (req, res) => app(req, res);
