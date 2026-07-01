@@ -1,8 +1,8 @@
 {
   "version": 2,
   "rewrites": [
-    { "source": "/search",      "destination": "/api/server" },
-    { "source": "/suggest-all", "destination": "/api/server" },
+    { "source": "/search",      "destination": "/api/server.js" },
+    { "source": "/suggest-all", "destination": "/api/server.js" },
     { "source": "/decision",    "destination": "/api/server" },
     { "source": "/(.*)",         "destination": "/frontend/build/$1"}
   ]
