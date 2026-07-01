@@ -749,7 +749,7 @@ function App() {
   const dropdownRef                             = useRef(null);
 
   // Dynamic Category Extraction — derived from dish name (category card removed)
-  const currentCategory = useMemo(() => {
+  const _currentCategory = useMemo(() => {
     return selectedDish ? detectCategory(selectedDish.dishName) : "mainCourse";
   }, [selectedDish]);
 
