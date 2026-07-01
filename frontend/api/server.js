@@ -5,6 +5,15 @@ if (!globalThis.fetch) {
 
 console.log("MULTILINGUAL INDIAN RESTAURANT ENGINE v3 — Strict Language-Mirrored Output + Accurate Image Search");
 
+// Safety net: log unexpected errors instead of letting them silently kill the
+// whole server (which was causing "Connection sync dropped" on the very next request).
+process.on("unhandledRejection", (err) => {
+  console.error("Unhandled rejection (server kept alive):", err);
+});
+process.on("uncaughtException", (err) => {
+  console.error("Uncaught exception (server kept alive):", err);
+});
+
 const express = require("express");
 const cors    = require("cors");
 const Groq    = require("groq-sdk");
@@ -13,11 +22,8 @@ require("dotenv").config();
 
 const app = express();
 app.use(cors());
-app.use(express.json());
-app.use((req, res, next) => {
-  res.setHeader("Content-Type", "application/json");
-  next();
-});
+app.use(express.json({ limit: "10mb" }));
+
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
 // ─── Static dish databases ────────────────────────────────────────────────────
@@ -48,7 +54,7 @@ const MAINS_DB = [
   "Jeera Rice","Plain Basmati Rice","Butter Naan","Garlic Naan","Plain Naan",
   "Tandoori Roti","Lacha Paratha","Rumali Roti"
 ];
-const PIZZA_DB    = ["Margherita Pizza","Paneer Tikka Pizza","Chicken Tikka Pizza","Veggie Supreme Pizza","Pepperoni Pizza","BBQ Chicken Pizza","Mushroom & Corn Pizza","Cheese Burst Pizza"];
+const PIZZA_DB    = ["Margherita Pizza","Paneer Tikka Pizza","Chicken Pizza","Veggie Supreme Pizza","Pepperoni Pizza","BBQ Chicken Pizza","Mushroom & Corn Pizza","Cheese Burst Pizza"];
 const ICECREAM_DB = ["Vanilla Ice Cream","Chocolate Ice Cream","Mango Ice Cream","Strawberry Ice Cream","Butterscotch Ice Cream","Pista Kulfi Ice Cream","Blackcurrent Ice Cream","Sizzling Brownie with Ice Cream"];
 
 // ─── Curated Unsplash image sets ──────────────────────────────────────────────
@@ -67,7 +73,7 @@ const DISH_SETS = {
   pizza:        [U("photo-1565299624946-b28f40a0ae38"),U("photo-1574071318508-1cdbab80d002"),U("photo-1593560708920-61dd98c46a4e"),U("photo-1513104890138-7c749659a591"),U("photo-1571407970349-bc81e71e2d3d")],
   pasta:        [U("photo-1473093295043-cdd812d0e601"),U("photo-1555949258-eb67b1ef0ceb"),U("photo-1621996346565-e3dbc646d9a9"),U("photo-1598866594230-a7c12756260f"),U("photo-1484723091739-30a097e8f929")],
   burger:       [U("photo-1568901346375-23c9450c58cd"),U("photo-1550547660-d9450f859349"),U("photo-1586190848861-99aa4a171e90"),U("photo-1571091718767-18b5b1457add"),U("photo-1553979459-d2229ba7433b")],
-  sandwich:     [U("photo-1528735602780-2552fd46c7af"),U("photo-1485963631004-f2f00b1d6606"),U("photo-1481070414801-51fd732d7184"),U("photo-1509722747041-616f39b57569"),U("photo-1553909489-cd47e0907980")],
+  sandwich:     [U("photo-1528735602780-2552fd46c7af"),U("photo-1485963631004-f2f00b1d6606"),U("photo-1481070414801-51fd732d7184"),U("photo-1509722747041-616f39b57569"),U("photo-1553090489-cd47e0907980")],
   chaat:        [U("photo-1601050690597-df056fb4ce78"),U("photo-1567337710282-00832b415979"),U("photo-1606491956689-2ea866880c84"),U("photo-1604908176997-125f25cc6f3d"),U("photo-1603133872878-684f208fb84b")],
   bread:        [U("photo-1534422298391-e4f8c172dddb"),U("photo-1608686207856-001b95cf60ca"),U("photo-1579912437714-a57751c39469"),U("photo-1585478259715-876acc5be8eb"),U("photo-1509440159596-0249088772ff")],
   soup:         [U("photo-1547592166-23ac45744acd"),U("photo-1476718406336-bb5a9690ee2a"),U("photo-1603105037880-880cd4edfb0d"),U("photo-1541832676-9b763b0239ab"),U("photo-1607532941433-304659e8198a")],
@@ -145,57 +151,46 @@ const SUPPORTED_LANGUAGES = [
 const LANGUAGE_SCRIPT_EXAMPLES = {
   Hindi:      { script:"Devanagari", examples:["मुख्य कोर्स","सर्वश्रेष्ठ विक्रेता","तीखा और स्वादिष्ट","भारतीय व्यंजन","शाकाहारी"] },
   Tamil:      { script:"Tamil",      examples:["முதன்மை உணவு","சிறந்த விற்பனையாளர்","காரமான மற்றும் சுவையான","இந்திய உணவு","சைவம்"] },
-  Telugu:     { script:"Telugu",     examples:["మెయిన్ కోర్సు","బెస్ట్ సెల్లర్","ಘಾಟైన మరియు రుచಿಕరమైన","భారతీయ వంటకాలు","శాకాహారం"] },
-  Kannada:    { script:"Kannada",    examples:["ಮುಖ್ಯ ಕೋರ್ಸ್","ಅತ್ಯುತ್ತಮ ಮಾರಾಟ","ಖಾರ ಮತ್ತು ರುಚಿಕರ","ಭಾರತೀಯ ಪಾಕಶಾಲೆ","ಶಾಕಾಹಾರ","ಉತ್ತರ ಭಾರತೀಯ","ವಿಶೇಷ ಕೊಡುಗೆ"] },
+  Telugu:     { script:"Telugu",     examples:["మెయిన్ కోర్సు","బెస్ట్ సెల్లర్","ఘాటైన మరియు రుచికరమైన","భారతీయ వంటకాలు","శాకాహారం"] },
+  Kannada:    { script:"Kannada",    examples:["ಮುಖ್ಯ ಕೋರ್ಸ್","ಅತ್ಯುತ್ತಮ ಮಾರಾಟ","ಖಾರ ಮತ್ತು ರುಚಿಕর","ಭారತೀಯ ಪಾಕಶಾಲೆ","శాకాహార","ಉತ್ತರ ಭಾರತೀಯ","ವಿಶೇಷ ಕೊಡುಗೆ"] },
   Malayalam:  { script:"Malayalam",  examples:["മെയിൻ കോഴ്‌സ്","ഏറ്റവും കൂടുതൽ വിൽക്കുന്നത്","മൂർച്ചയേറിയതും രുചികരവും","ഇന്ത്യൻ ഭക്ഷണം","സസ്യാഹാരം"] },
   Marathi:    { script:"Devanagari", examples:["मुख्य जेवण","सर्वाधिक विकली जाणारी","तिखट आणि चवदार","भारतीय पाकशैली","शाकाहारी"] },
   Bengali:    { script:"Bengali",    examples:["মূল কোর্স","সবচেয়ে বেশি বিক্রি","ঝাল এবং সুস্বাদু","भारतीय রন্ধনশৈলী","নিরামিষ"] },
-  Gujarati:   { script:"Gujarati",   examples:["મુખ્ય કોર્સ","સૌથી વધુ વેચાણ","તીખું અને સ્વાદಿષ્ટ","ભારતીય ભોજન","શાકાહારી"] },
-  Punjabi:    { script:"Gurmukhi",   examples:["ਮੁੱਖ ਕੋਰਸ","ਸਭ ਤੋਂ ਵੱਧ ਵਿਕਣ ਵਾਲਾ","ਮਸਾਲੇਦาร ಮತ್ತು ਸੁਆਦੀ","ਭਾਰਤੀ ਪਕਵาน","ਸ਼ਾਕಾਹਾਰੀ"] },
-  Odia:       { script:"Odia",       examples:["මୁଖ್ಯ ପଦ","ସර්ვაଧಿಕ ବିକ୍ରය","ଝಾଳ ଏବಂ ସୁସ୍ୱାଦು","ଭାରತୀಯ රೋಷေଇ","ନිରାମိଷ"] },
-  Urdu:       { script:"Nastaliq",   examples:["مرکزی کورس","سب سے زیادہ فروخت","مسالیدار اور لذیذ","ہندوستانی کھانا","سبزی خور"] },
-  Assamese:   { script:"Assamese",   examples:["মুখ্য পদ","সর্বাধিক বিক্রী","জলা আৰু সুস্বাদু","ভাৰতীয় ৰন্ধন","নিৰামিষ"] },
-  Arabic:     { script:"Arabic",     examples:["الطبق الرئيسي","الأكثر مبيعاً","حار ولذيذ","المطبخ الهندي","نباتي"] },
-  French:     { script:"Latin",      examples:["Plat principal","Meilleure vente","Épicé et délicieux","Cuisine indienne","Végétarien"] },
-  German:     { script:"Latin",      examples:["Hauptgericht","Bestseller","Würzig und lecker","Indische Küche","Vegetarisch"] },
+  Gujarati:   { script:"Gujarati",   examples:["મુખ્ય કોર્સ","સૌથી વધુ વેચાણ","તીખું आणि સ્વાદિષ્ટ","ભારતીయ વાનગીઓ","શાકાહારી"] },
+  Punjabi:    { script:"Gurmukhi",   examples:["ਮੁੱਖ ਕੋਰਸ","ਸਭ ਤੋਂ ਵੱਧ ਵਿਕਣ ਵਾਲਾ","ਮਸਾਲੇਦาร ਅਤੇ ਸੁਆਦੀ","ਭਾਰਤੀ ਪਕਵਾਨ","ਸ਼ਾਕਾਹਾਰੀ"] },
   Spanish:    { script:"Latin",      examples:["Plato principal","El más vendido","Picante y delicioso","Cocina india","Vegetariano"] },
-  Italian:    { script:"Latin",      examples:["Piatto principale","Il più venduto","Piccante e delizioso","Cucina indiana","Vegetariano"] },
+  Italian:    { script:"Latin",      examples:["Piatto principale","Il più venduto","Picante e delizioso","Cucina indiana","Vegetariano"] },
   Portuguese: { script:"Latin",      examples:["Prato principal","O mais vendido","Picante e delicioso","Cozinha indiana","Vegetariano"] },
   Chinese:    { script:"Chinese",    examples:["主菜","畅销","辛辣美味","印度料理","素食"] },
   Japanese:   { script:"Japanese",   examples:["メインコース","ベストセラー","スパイシーで美味しい","インド料理","ベジタリアン"] },
   Korean:     { script:"Korean",     examples:["메인 코스","베스트셀러","맵고 맛있는","인도 요리","채식주의자"] },
   Russian:    { script:"Cyrillic",   examples:["Основное блюдо","Хит продаж","Острое и вкусное","Индийская кухня","Вегетарианское"] },
-  Turkish:    { script:"Latin",      examples:["Ana yemek","En çok satan","Baharatlı et lezzetli","Hint mutfağı","Vejetaryen"] },
+  Turkish:    { script:"Latin",      examples:["Ana yemek","En çok satan","Baharatlı ve lezzetli","Hint mutfağı","Vejetaryen"] },
 };
 
 // ─── Google Custom Search Image Fetch ─────────────────────────────────────────
 async function googleImageSearch(dishName) {
   const GOOGLE_API_KEY = process.env.GOOGLE_API_KEY || process.env.REACT_APP_GOOGLE_API_KEY || "";
-  const GOOGLE_CX      = process.env.GOOGLE_CX      || process.env.REACT_APP_GOOGLE_CX      || "";
-
+  const GOOGLE_CX = process.env.GOOGLE_CX || process.env.REACT_APP_GOOGLE_CX || "";
   if (!GOOGLE_API_KEY || !GOOGLE_CX) {
-    console.log("⚠️  Google CSE keys not set — using curated Unsplash fallback");
+    console.log("Google CSE keys not set — using curated Unsplash fallback");
     return null;
   }
-
   const searchQuery = encodeURIComponent(`${dishName} food restaurant dish professional photography`);
   const url = `https://www.googleapis.com/customsearch/v1?key=${GOOGLE_API_KEY}&cx=${GOOGLE_CX}&q=${searchQuery}&searchType=image&num=5&imgSize=large&imgType=photo&safe=active&fields=items(link)`;
-
   try {
-    const res  = await fetch(url);
+    const res = await fetch(url);
     const data = await res.json();
-
     if (!res.ok) {
       console.error("Google CSE error:", data?.error?.message || res.status);
       return null;
     }
-
     const urls = (data.items || []).map(item => item.link).filter(Boolean);
     if (urls.length >= 3) {
       console.log(`✅ Google CSE returned ${urls.length} images for "${dishName}"`);
       return urls;
     }
-    console.log(`⚠️  Google CSE returned only ${urls.length} images — falling back`);
+    console.log(`⚠️ Google CSE returned only ${urls.length} images — falling back`);
     return null;
   } catch (e) {
     console.error("Google image fetch error:", e.message);
@@ -206,50 +201,38 @@ async function googleImageSearch(dishName) {
 // ─── Curated Unsplash fallback ─────────────────────────────────────────────────
 function curatedImageFallback(dishName) {
   const lower = (dishName || "").toLowerCase().trim();
-
   let bestKey = null, bestScore = 0;
   for (const rule of MATCH_RULES) {
     for (const term of rule.terms) {
-      if (lower.includes(term) || term.includes(lower)) {
-        const score = term.length + (lower === term ? 50 : 0);
-        if (score > bestScore) { bestScore = score; bestKey = rule.key; }
+      if (lower.includes(term) && term.length > bestScore) {
+        bestScore = term.length;
+        bestKey = rule.key;
       }
     }
   }
-  if (bestKey && DISH_SETS[bestKey]) return DISH_SETS[bestKey];
-
-  let cat = "mainCourse";
-  if (["beer","wine","whisky","whiskey","vodka","rum","gin","tequila","cocktail","mocktail"].some(k => lower.includes(k))) cat = "liquor";
-  else if (["juice","lemonade","nimbu"].some(k => lower.includes(k))) cat = "juice";
-  else if (["tea","chai","coffee","shake","lassi","soda","cola","water","milk"].some(k => lower.includes(k))) cat = "beverage";
-  else if (["soup","shorba","rasam"].some(k => lower.includes(k))) cat = "soup";
-  else if (["ice cream","kulfi","halwa","gulab jamun","jalebi","rasgulla","cake","brownie","dessert"].some(k => lower.includes(k))) cat = "dessert";
-  else if (["biryani","pulao","fried rice","khichdi"].some(k => lower.includes(k))) cat = "rice";
-  else if (["naan","roti","paratha","kulcha","puri","bhatura"].some(k => lower.includes(k))) cat = "bread";
-  else if (["tikka","kebab","chaat","fry","manchurian","chilli","pakoda","samosa","momos"].some(k => lower.includes(k))) cat = "starter";
-
-  const catKey = CATEGORY_SET[cat] || "premiumPlated";
-  return DISH_SETS[catKey] || DISH_SETS.premiumPlated;
+  if (!bestKey) {
+    for (const [cat, key] of Object.entries(CATEGORY_SET)) {
+      if (lower.includes(cat)) { bestKey = key; break; }
+    }
+  }
+  return DISH_SETS[bestKey || "premiumPlated"];
 }
 
 // ─── Main image function: Google CSE → curated fallback, always 5 URLs ────────
 async function generateImageSuggestions(dishName, englishName) {
   const lookupName = englishName || dishName;
-
   const googleResults = await googleImageSearch(lookupName);
   if (googleResults && googleResults.length > 0) {
     const fallback = curatedImageFallback(lookupName);
     while (googleResults.length < 5) googleResults.push(fallback[googleResults.length] || fallback[0]);
     return googleResults.slice(0, 5);
   }
-
   return curatedImageFallback(lookupName);
 }
 
 // ─── Language detection ────────────────────────────────────────────────────────
 async function detectLanguage(text) {
   const hasNonLatin = /[^\x00-\x7F]/.test(text);
-
   if (/[\u0900-\u097F]/.test(text)) {
     if (/आहे|आहेत|नाही|मराठी/.test(text)) return "Marathi";
     return "Hindi";
@@ -279,314 +262,457 @@ async function detectLanguage(text) {
     try {
       const response = await groq.chat.completions.create({
         messages: [
-          {
-            role: "system",
-            content: `You are a language detector. Identify the primary language of the input text.
-Choose EXACTLY ONE from this list: ${SUPPORTED_LANGUAGES.join(", ")}.
-Return ONLY the language name. No punctuation, no explanation.
-If unsure or standard English, return "English".`
-          },
-          { role: "user", content: text }
+          { role: "system", content: `You are a language detector. Identify the primary language of the text. Respond with ONLY the language name from this list: ${SUPPORTED_LANGUAGES.join(", ")}. If unsure, respond with English.` },
+          { role: "user", content: `Text: "${text}"` }
         ],
-        model: "llama-3.1-8b-instant",
-        temperature: 0.0,
+        model: "openai/gpt-oss-20b",
+        temperature: 0,
         max_tokens: 10
       });
-      const lang = (response.choices[0]?.message?.content || "English").trim();
-      return SUPPORTED_LANGUAGES.includes(lang) ? lang : "English";
-    } catch { return "English"; }
+      const detected = response.choices[0]?.message?.content?.trim();
+      if (SUPPORTED_LANGUAGES.includes(detected)) return detected;
+    } catch (e) {
+      console.error("Language detection model error:", e.message);
+    }
   }
-
   return "English";
 }
 
-// ─── Translation to English (for image lookups and category detection) ────────
+// ─── Translation helpers ───────────────────────────────────────────────────────
 async function translateToEnglish(text) {
   try {
     const response = await groq.chat.completions.create({
       messages: [
-        { role:"system", content:"You are a translation utility for Indian and international food items. Translate the input dish/food name into standard English culinary terminology. Return ONLY the English name, no explanation, no punctuation beyond the name itself." },
-        { role:"user",   content: text }
+        { role: "system", content: "You are an expert translator. Translate the restaurant item or text completely to standard English food terms. Return ONLY the English translation, no explanation, no quotation marks." },
+        { role: "user", content: `Translate: "${text}"` }
       ],
-      model: "llama-3.1-8b-instant",
-      temperature: 0.0,
+      model: "openai/gpt-oss-20b",
+      temperature: 0,
+      max_tokens: 40
+    });
+    return response.choices[0]?.message?.content?.trim().replace(/^"|"$/g, '') || text;
+  } catch (e) {
+    return text;
+  }
+}
+
+async function translateTerm(term, targetLanguage) {
+  if (targetLanguage === "English") return term;
+  try {
+    const response = await groq.chat.completions.create({
+      messages: [
+        { role: "system", content: `Translate the short food category/tag/label to ${targetLanguage}. Keep it under 3 words. Return ONLY the translation, matching the native script accurately.` },
+        { role: "user", content: `Translate "${term}" to ${targetLanguage}` }
+      ],
+      model: "openai/gpt-oss-20b",
+      temperature: 0,
       max_tokens: 30
     });
-    return (response.choices[0]?.message?.content || text).trim();
-  } catch { return text; }
+    return response.choices[0]?.message?.content?.trim().replace(/^"|"$/g, '') || term;
+  } catch (e) {
+    return term;
+  }
+}
+
+// ─── Batch translation helper (English dish names → target language, one call) ─
+async function translateDishNamesBatch(englishNames, targetLanguage) {
+  if (targetLanguage === "English" || englishNames.length === 0) return englishNames;
+  try {
+    const langInfo = LANGUAGE_SCRIPT_EXAMPLES[targetLanguage];
+    const scriptNote = langInfo ? `Write strictly in ${langInfo.script} script.` : `Write strictly in ${targetLanguage}.`;
+    const response = await groq.chat.completions.create({
+      messages: [
+        { role: "system", content: `You are an expert food menu translator. Translate each English dish name in the list to natural, native ${targetLanguage} (as it would appear on a real restaurant menu). ${scriptNote} Keep the same order. Return ONLY a valid JSON object: { "translations": ["<name1>", "<name2>", ...] } with exactly ${englishNames.length} entries.` },
+        { role: "user", content: JSON.stringify(englishNames) }
+      ],
+      model: "openai/gpt-oss-20b",
+      response_format: { type: "json_object" },
+      temperature: 0
+    });
+    const parsed = JSON.parse(response.choices[0]?.message?.content || "{}");
+    const translations = parsed.translations || parsed.items || [];
+    if (Array.isArray(translations) && translations.length === englishNames.length) {
+      return translations;
+    }
+    return englishNames;
+  } catch (e) {
+    console.error("Batch translation error:", e.message);
+    return englishNames;
+  }
 }
 
 // ─── Search endpoint ───────────────────────────────────────────────────────────
 app.get("/search", async (req, res) => {
-  const originalQuery = String(req.query.q || "").trim();
-  if (originalQuery.length < 2) return res.json([]);
+  const originalQuery = req.query.q || "";
+  if (!originalQuery.trim()) return res.json([]);
 
-  const hasNonLatin    = /[^\x00-\x7F]/.test(originalQuery);
   const targetLanguage = await detectLanguage(originalQuery);
-  const englishQuery   = hasNonLatin || targetLanguage !== "English"
-    ? (await translateToEnglish(originalQuery)).toLowerCase()
-    : originalQuery.toLowerCase();
-
+  const englishQuery = targetLanguage !== "English" ? (await translateToEnglish(originalQuery)).toLowerCase() : originalQuery.toLowerCase();
   console.log(`Search: "${originalQuery}" → detected: ${targetLanguage}, english: "${englishQuery}"`);
 
-  if (englishQuery === "pizza") return res.json(PIZZA_DB.map(n => ({ dishName: n, confidence: 100, inputLanguage: targetLanguage })));
-  if (englishQuery.includes("ice cream") || englishQuery === "ice") return res.json(ICECREAM_DB.map(n => ({ dishName: n, confidence: 100, inputLanguage: targetLanguage })));
+  const respondWithDishes = async (englishDishNames, confidenceMap) => {
+    const translatedNames = await translateDishNamesBatch(englishDishNames, targetLanguage);
+    const results = englishDishNames.map((en, idx) => ({
+      dishName: translatedNames[idx] || en,
+      englishName: en,
+      confidence: confidenceMap ? (confidenceMap[en] || 80) : 100,
+      inputLanguage: targetLanguage
+    }));
+    return res.json(results.slice(0, 15));
+  };
 
-  const isBeverage = ["beer","vodka","rum","whiskey","whisky","gin","wine","liquor","drink","juice","lassi","shake","soda","cola","mango"].some(k => englishQuery.includes(k));
-  const isDessert  = ["dessert","sweet","jamun","rasmalai","kulfi","halwa","ice cream","cake","ice"].some(k => englishQuery.includes(k));
-  const isStarter  = ["starter","tikka","kebab","soup","fry","fries","chilli","manchurian","samosa","pakoda"].some(k => englishQuery.includes(k));
+  if (englishQuery === "pizza") return respondWithDishes(PIZZA_DB, null);
+  if (englishQuery.includes("ice cream") || englishQuery === "ice") return respondWithDishes(ICECREAM_DB, null);
+
+  // FIX: Evaluate Dessert checks before Beverage checks so chocolate ice cream doesn't trip up on "cola"
+  const isDessert = ["dessert","sweet","jamun","rasmalai","kulfi","halwa","ice cream","cake","ice"].some(k => englishQuery.includes(k));
+  const isBeverage = !isDessert && ["beer","vodka","rum","whiskey","whisky","gin","wine","liquor","drink","juice","lassi","shake","soda","cola","mango"].some(k => englishQuery.includes(k));
+  const isStarter = ["starter","tikka","kebab","soup","fry","fries","chilli","manchurian","samosa","pakoda"].some(k => englishQuery.includes(k));
 
   let primaryPool = [], contextRule = "";
-  if (isBeverage)     { primaryPool = BEVERAGES_DB; contextRule = "BEVERAGES, LIQUOR, and JUICES only."; }
-  else if (isDessert) { primaryPool = DESSERTS_DB;  contextRule = "INDIAN DESSERTS and ICE CREAMS only."; }
-  else if (isStarter) { primaryPool = STARTERS_DB;  contextRule = "INDIAN APPETIZERS and STARTERS only."; }
-  else                { primaryPool = [...MAINS_DB,...STARTERS_DB,...DESSERTS_DB,...BEVERAGES_DB]; contextRule = "authentic Indian restaurant menu items."; }
+  if (isDessert) {
+    primaryPool = DESSERTS_DB;
+    contextRule = "INDIAN DESSERTS and ICE CREAMS only.";
+  } else if (isBeverage) {
+    primaryPool = BEVERAGES_DB;
+    contextRule = "BEVERAGES, LIQUOR, and JUICES only.";
+  } else if (isStarter) {
+    primaryPool = STARTERS_DB;
+    contextRule = "INDIAN APPETIZERS and STARTERS only.";
+  } else {
+    primaryPool = [...MAINS_DB,...STARTERS_DB,...DESSERTS_DB,...BEVERAGES_DB];
+    contextRule = "authentic Indian restaurant menu items.";
+  }
 
   const localMatches = primaryPool.filter(item => item.toLowerCase().includes(englishQuery));
   if (localMatches.length >= 3) {
-    return res.json(localMatches.map(n => ({ dishName: n, confidence: 100, inputLanguage: targetLanguage })).slice(0, 15));
+    return respondWithDishes(localMatches, null);
   }
 
   try {
     const response = await groq.chat.completions.create({
       messages: [
-        {
-          role: "system",
-          content: `You are an Indian Restaurant POS database. The user searched in "${targetLanguage}".
-IMPORTANT: Return dish names in ENGLISH always for the search results.
-STRICT: ${contextRule}
-Return a valid JSON object with a "dishes" array.`
-        },
-        {
-          role: "user",
-          content: `Return up to 12 real Indian restaurant menu items matching "${originalQuery}" (English meaning: "${englishQuery}").
-Each item: { "dishName": "<English name>", "confidence": <60-100> }.
-Format: { "dishes": [...] }`
-        }
-      ],
-      model: "llama-3.1-8b-instant",
-      temperature: 0.0,
-      response_format: { type: "json_object" }
+        { role: "system", content: `You are an Indian Restaurant POS database. The search term is "${englishQuery}" (originally typed in ${targetLanguage} as "${originalQuery}"). IMPORTANT: Every dish you return MUST actually contain or directly relate to "${englishQuery}" — do NOT return generic or loosely related dishes. Return dish names in ENGLISH only. STRICT: ${contextRule} Return a valid JSON object with a "dishes" array.` },
+        { role: "user", content: `Return up to 12 real Indian restaurant menu items that genuinely contain or are direct variants of "${englishQuery}". Do not include unrelated dishes. Each item: { "dishName": "<English name>", "confidence": <60-100> }. Format: { "dishes": [...] }` } ],
+      model: "openai/gpt-oss-20b",
+      response_format: { type: "json_object" },
+      temperature: 0
     });
+    const parsed = JSON.parse(response.choices[0]?.message?.content || "{}");
+    let items = parsed.dishes || parsed.items || [];
+    items = items.map(item => ({
+      dishName: item.dishName || item.name,
+      confidence: item.confidence || 80
+    })).filter(i => i.dishName);
 
-    const data     = JSON.parse(response.choices[0]?.message?.content || "{}");
-    let aiDishes   = (data.dishes || []).map(d => ({ ...d, inputLanguage: targetLanguage }));
-    if (englishQuery.includes("pizza")) aiDishes = aiDishes.filter(d => d.dishName.toLowerCase().includes("pizza"));
-    return res.json(aiDishes);
-  } catch (error) {
-    console.error("Search error:", error.message);
-    return res.json(localMatches.map(n => ({ dishName: n, confidence: 95, inputLanguage: targetLanguage })));
+    // Relevance guard: drop results that don't actually relate to the typed query
+    const qTokens = englishQuery.split(/\s+/).filter(t => t.length >= 2);
+    const relevant = items.filter(i => {
+      const candidate = i.dishName.toLowerCase();
+      return qTokens.some(t => candidate.includes(t)) || candidate.includes(englishQuery) || englishQuery.includes(candidate);
+    });
+    const finalItems = relevant.length > 0 ? relevant : items;
+
+    const englishNames = finalItems.map(i => i.dishName);
+    const confidenceMap = {};
+    finalItems.forEach(i => { confidenceMap[i.dishName] = i.confidence; });
+    return respondWithDishes(englishNames, confidenceMap);
+  } catch (e) {
+    console.error("Groq search error:", e.message);
+    return respondWithDishes(primaryPool.slice(0, 6), null);
   }
 });
 
-// ─── Suggest-all endpoint ──────────────────────────────────────────────────────
-app.post("/suggest-all", async (req, res) => {
-  const { dishName, inputLanguage: clientLang } = req.body || {};
+// ─── Specifications profile builder endpoint ───────────────────────────────────
+app.post("/specifications", async (req, res) => {
+  const { dishName, inputLanguage } = req.body || {};
   if (!dishName) return res.status(400).json({ error: "dishName is required." });
 
-  const targetLanguage = clientLang && SUPPORTED_LANGUAGES.includes(clientLang)
-    ? clientLang
-    : await detectLanguage(dishName);
-
-  const englishName = targetLanguage !== "English"
-    ? await translateToEnglish(dishName)
-    : dishName;
-
+  const targetLanguage = inputLanguage || "English";
+  const englishName = targetLanguage !== "English" ? await translateToEnglish(dishName) : dishName;
   const lowerName = englishName.toLowerCase();
-  console.log(`Suggest-all: "${dishName}" | lang: ${targetLanguage} | english: "${englishName}"`);
+  const rawLower = (dishName || "").toLowerCase();
 
+  const LIQUOR_KEYWORDS = ["beer","lager","ale","stout","vodka","rum","whiskey","whisky","scotch","bourbon","gin","tequila","brandy","cognac","wine","champagne","prosecco","cocktail","liqueur","liquor","spirit","budweiser","kingfisher","heineken","corona","bira","smirnoff","absolut","bacardi","johnnie","jameson","jack daniel","blenders","royal stag","old monk"];
+  const isLiquor = LIQUOR_KEYWORDS.some(k => lowerName.includes(k)) || LIQUOR_KEYWORDS.some(k => rawLower.includes(k));
+
+  // FIX: Dessert checked before Beverage to eliminate "chocolate" containing "cola" issue
   let forcedCategory = null;
-  if (["beer","vodka","rum","whiskey","whisky","gin","wine","liquor","cocktail","juice","shake","lassi","soda","tea","coffee"].some(k => lowerName.includes(k))) forcedCategory = "Beverage";
-  else if (["ice cream","cake","pudding","sweet","dessert","gulab jamun","kulfi","rasgulla","halwa","rasmalai"].some(k => lowerName.includes(k))) forcedCategory = "Dessert";
-  else if (["soup","tikka","kebab","wings","fry","fries","chilli","manchurian","samosa","pakoda","chaat","starter"].some(k => lowerName.includes(k))) forcedCategory = "Starter";
-  else if (lowerName.includes("pizza")) forcedCategory = "Main Course";
+  if (isLiquor) forcedCategory = "Beverage";
+  else if (["ice cream","cake","pudding","dessert","gulab jamun","kulfi","rasgulla","halwa","rasmalai","brownie","pastry","jalebi"].some(k => lowerName.includes(k))) forcedCategory = "Dessert";
+  else if (["juice","lassi","shake","milkshake","smoothie","soda","cola","tea","chai","coffee","lemonade","water","milk","buttermilk"].some(k => lowerName.includes(k))) forcedCategory = "Beverage";
+  else if (["soup","tikka","kebab","wings","fry","fries","chilli","manchurian","samosa","pakoda","chaat","spring roll","momos"].some(k => lowerName.includes(k))) forcedCategory = "Starter";
+  else if (["biryani","pulao","fried rice","curry","masala","korma","makhani","dal","naan","roti","paratha","pizza","pasta","burger","butter chicken"].some(k => lowerName.includes(k))) forcedCategory = "Main Course";
 
+  const isBeverage = forcedCategory === "Beverage" && !isLiquor;
   const finalImageUrls = await generateImageSuggestions(dishName, englishName);
 
-  const langInfo    = LANGUAGE_SCRIPT_EXAMPLES[targetLanguage] || null;
-  const isEnglish   = targetLanguage === "English";
-  const scriptGuide = langInfo
-    ? `SCRIPT: You MUST write EVERYTHING in ${langInfo.script} script. Example translations: ${langInfo.examples.join(", ")}`
-    : isEnglish
-      ? "Write in clear English."
-      : `Write strictly in ${targetLanguage} language/script.`;
+  const langInfo = LANGUAGE_SCRIPT_EXAMPLES[targetLanguage] || null;
+  const isEnglish = targetLanguage === "English";
+  const scriptGuide = langInfo ? `SCRIPT: You MUST write EVERYTHING in ${langInfo.script} script. Example translations: ${langInfo.examples.join(", ")}` : isEnglish ? "Write in clear English." : `Write strictly in ${targetLanguage} language/script.`;
 
-  const isLiquor   = ["beer","vodka","rum","whiskey","whisky","gin","wine","tequila","brandy","cognac","cocktail"].some(k => lowerName.includes(k));
-  const isBeverage = forcedCategory === "Beverage";
+  const basePrice = isLiquor ? 350 : isBeverage ? 120 : forcedCategory === "Dessert" ? 180 : forcedCategory === "Starter" ? 220 : 280;
 
-  const defaultUom  = isLiquor ? "Peg" : isBeverage ? "Glass" : forcedCategory === "Dessert" ? "Serve" : "Plate";
-  const defaultTax  = isLiquor ? "20% VAT" : "5% GST";
-  const basePrice   = isLiquor ? 350 : isBeverage ? 120 : forcedCategory === "Dessert" ? 180 : 250;
+  const uomVariants = isLiquor ? ["Peg (30ml)","Peg (60ml)","Pint","Bottle","Pitcher"] : isBeverage ? ["Glass","Cup","Serve","Bottle","Pint"] : ["Portion","Plate","Piece","Serve","Bowl"];
+  const prepTimeVariants = isLiquor ? ["2 mins","3 mins","5 mins","4 mins","1 min"] : isBeverage ? ["5 mins","7 mins","10 mins","4 mins","6 mins"] : ["15 mins","20 mins","12 mins","18 mins","25 mins"];
+  const priceVariants = [`Rs. ${basePrice}`,`Rs. ${basePrice + 20}`,`Rs. ${basePrice - 20}`,`Rs. ${basePrice + 50}`,`Rs. ${basePrice + 10}`];
+  const taxVariants = isLiquor ? ["20% VAT","22% VAT","25% VAT","18% VAT","30% VAT"] : ["5% GST","12% GST","18% GST","0% GST","28% GST"];
 
-  const uomVariants = isLiquor
-    ? ["Peg","Pint","Glass","Bottle","Large Peg"]
-    : isBeverage
-      ? ["Glass","Cup","Bottle","Serve","Large Glass"]
-      : forcedCategory === "Dessert"
-        ? ["Serve","Plate","Bowl","Scoop","Piece"]
-        : forcedCategory === "Starter"
-          ? ["Plate","Portion","Piece","Half Plate","Skewer"]
-          : ["Plate","Portion","Bowl","Half Plate","Family Pack"];
-
-  const taxVariants = isLiquor
-    ? ["20% VAT","25% VAT","18% GST","22% VAT","28% GST"]
-    : ["5% GST","12% GST","18% GST","GST Inclusive","Tax Extra"];
-
-  const priceVariants = [
-    `Rs. ${basePrice}`,
-    `Rs. ${Math.round(basePrice * 0.8)}`,
-    `Rs. ${Math.round(basePrice * 1.2)}`,
-    `Rs. ${Math.round(basePrice * 1.4)}`,
-    `Rs. ${Math.round(basePrice * 0.6)}`,
+  // DYNAMIC FALLBACK BUILDERS FOR TARGET FIELDS
+  const words = englishName.toUpperCase().replace(/[^A-Z ]/g, "").split(/\s+/).filter(Boolean);
+  let codeBase = words.map(w => w[0]).join("").slice(0, 4);
+  if (codeBase.length < 2 && words[0]) codeBase = words[0].slice(0, 3);
+  if (!codeBase) codeBase = "DN";
+  const fbShortName = [
+    codeBase,
+    codeBase + "1",
+    codeBase + "X",
+    codeBase.slice(0, 2) + "M",
+    "SPL"
   ];
 
-  try {
-    const prompt = `You are a multilingual restaurant menu content generator. Your ONLY job is to generate menu field values.
+  let initialCuisine = "North Indian";
+  if (["dosa", "idli", "uttapam", "vada", "sambar", "rasam"].some(k => lowerName.includes(k))) initialCuisine = "South Indian";
+  else if (["manchurian", "chilli", "noodles", "fried rice", "schezwan"].some(k => lowerName.includes(k))) initialCuisine = "Indo-Chinese";
+  else if (["pizza", "pasta", "lasagna"].some(k => lowerName.includes(k))) initialCuisine = "Italian";
+  else if (["burger", "fries", "sandwich"].some(k => lowerName.includes(k))) initialCuisine = "Continental";
+  else if (isLiquor) initialCuisine = "International";
 
-TARGET LANGUAGE: "${targetLanguage}"
-${scriptGuide}
+  const cuisineOptions = [initialCuisine, "Indian", "Mughlai", "Fusion", "Chef's Selection"];
+  const fbCuisine = await Promise.all(cuisineOptions.map(async (c) => await translateTerm(c, targetLanguage)));
 
-Dish name (as typed by user): "${dishName}"
-English dish name: "${englishName}"
-Dish department: ${forcedCategory || "auto-detect"}
-
-═══════════════════════════════════════════════════════
-ABSOLUTE RULES — VIOLATION = WRONG OUTPUT:
-1. ALL text fields (shortName, description, menuGroup, cuisine, foodType, classification) MUST be written ENTIRELY in ${targetLanguage} language/script. Absolutely NO English characters or mixing allowed for these text fields.
-2. "category" values MUST always be one of these EXACT English strings: "Beverages", "Desserts", "Starters", "Main Course"
-3. "uom" values MUST be one of: "Portion","Plate","Glass","Pint","Peg","Cup","Bowl","Serve","Piece"
-4. "prepTime" values like "15 mins", "price" like "Rs. 250", "tax" like "5% GST" — keep numeric format
-5. Generate exactly 5 variations for every field inside the "variations" object block.
-6. descriptions must be enticing, under 20 words each, fully in ${targetLanguage}.
-═══════════════════════════════════════════════════════
-
-Return ONLY a JSON object with this structure:
-{
-  "detectedCategory": "Beverage|Dessert|Starter|Main Course",
-  "shortName":      "<dish display name in ${targetLanguage}>",
-  "description":    "<enticing description in ${targetLanguage}, under 20 words>",
-  "category":       "<ENGLISH: Beverages|Desserts|Starters|Main Course>",
-  "menuGroup":      "<menu section name in ${targetLanguage}>",
-  "cuisine":        "<cuisine type in ${targetLanguage}>",
-  "foodType":       "<dietary type in ${targetLanguage}>",
-  "classification": "<tag like Best Seller in ${targetLanguage}>",
-  "uom":            "${defaultUom}",
-  "prepTime":       "15 mins",
-  "price":          "Rs. ${basePrice}",
-  "tax":            "${defaultTax}",
-  "variations": {
-    "shortName":      ["<5 different display names for '${dishName}' in ${targetLanguage}>"],
-    "description":    ["<5 different enticing descriptions in ${targetLanguage}, under 20 words each>"],
-    "menuGroup":      ["<5 different menu section names in ${targetLanguage}>"],
-    "cuisine":        ["<5 different cuisine type labels in ${targetLanguage}>"],
-    "foodType":       ["<5 different dietary labels in ${targetLanguage}>"],
-    "classification": ["<5 different promotional tags in ${targetLanguage}>"],
-    "category":       ["Beverages","Desserts","Starters","Main Course","Chef's Special"],
-    "uom":            ${JSON.stringify(uomVariants)},
-    "prepTime":       ["5 mins","10 mins","15 mins","20 mins","25 mins"],
-    "price":          ${JSON.stringify(priceVariants)},
-    "tax":            ${JSON.stringify(taxVariants)}
+  let defaultDiet = "Vegetarian";
+  if (["chicken", "mutton", "fish", "prawn", "egg", "lamb", "meat", "wings", "rogan josh", "keema"].some(k => lowerName.includes(k)) || ["chicken", "mutton", "fish", "prawn", "egg", "lamb", "meat", "wings"].some(k => rawLower.includes(k))) {
+    defaultDiet = "Non-Vegetarian";
+  } else if (isLiquor) {
+    defaultDiet = "Alcoholic";
   }
-}`;
+  const foodTypeOptions = defaultDiet === "Vegetarian" 
+    ? ["Vegetarian", "Pure Veg", "Vegan", "Jain Friendly", "Healthy Veg"] 
+    : defaultDiet === "Alcoholic"
+    ? ["Alcoholic", "Contains Alcohol", "Spirits", "Bar Special", "Premium Drink"]
+    : ["Non-Vegetarian", "Egg / Meat", "Halal Certified", "High Protein", "Non-Veg Special"];
+  const fbFoodType = await Promise.all(foodTypeOptions.map(async (f) => await translateTerm(f, targetLanguage)));
+
+  // Preset translation keys used for deterministic hard-overrides downstream
+  const translatedNonVeg = await translateTerm("Non-Vegetarian", targetLanguage);
+  const translatedMainCourseGroup = await translateTerm("Main Course", targetLanguage);
+  const translatedNonVegGroup = await translateTerm("Non-Vegetarian", targetLanguage);
+
+  const trueNonVegKeywords = ["chicken", "mutton", "fish", "prawn", "egg", "lamb", "meat", "wings", "rogan josh"];
+
+  // Moved outside try so it's also available inside the catch/fallback block below
+  const ensureFive = (arr, fallbacks) => {
+    const safe = Array.isArray(arr) ? arr.filter(Boolean) : [];
+    while (safe.length < 5) safe.push(fallbacks[safe.length % fallbacks.length]);
+    return safe.slice(0, 5);
+  };
+
+  try {
+    const prompt = `You are an advanced AI restaurant engine. Generate menu parameters for "${dishName}" (English: "${englishName}") completely in the language/script of "${targetLanguage}".
+    
+    STRICT COMPLIANCE RULES:
+    1. All values for shortName, description, menuGroup, cuisine, foodType, and classification MUST be written entirely in the native script of "${targetLanguage}".
+    2. "category" MUST remain in English and be one of: "Beverages", "Desserts", "Starters", "Main Course", "Chef's Special".
+    3. All arrays inside the "variations" object MUST contain exactly 5 distinct, high-quality choices.
+    4. Provide specific short abbreviations for "shortName" (e.g., 2-4 uppercase characters).
+    5. Ensure the dietary classification correctly labels items as Vegetarian or Non-Vegetarian.
+    
+    ${scriptGuide}
+
+    Return ONLY a JSON block structured exactly as follows:
+    {
+      "detectedCategory": "Beverage|Dessert|Starter|Main Course",
+      "shortName": "<native translated/abbreviated code>",
+      "description": "<native alluring description under 20 words>",
+      "category": "Main Course",
+      "menuGroup": "<native group name>",
+      "cuisine": "<native cuisine name>",
+      "foodType": "<native dietary tag>",
+      "classification": "<native promo tag>",
+      "uom": "${uomVariants[0]}",
+      "prepTime": "${prepTimeVariants[0]}",
+      "price": "Rs. ${basePrice}",
+      "tax": "${taxVariants[0]}",
+      "variations": {
+        "shortName": ["code1", "code2", "code3", "code4", "code5"],
+        "description": ["desc1", "desc2", "desc3", "desc4", "desc5"],
+        "menuGroup": ["g1", "g2", "g3", "g4", "g5"],
+        "cuisine": ["c1", "c2", "c3", "c4", "c5"],
+        "foodType": ["f1", "f2", "f3", "f4", "f5"],
+        "classification": ["t1", "t2", "t3", "t4", "t5"],
+        "category": ["Beverages", "Main Course", "Chef's Special", "Starters", "Desserts"],
+        "uom": ${JSON.stringify(uomVariants)},
+        "prepTime": ${JSON.stringify(prepTimeVariants)},
+        "price": ${JSON.stringify(priceVariants)},
+        "tax": ${JSON.stringify(taxVariants)}
+      }
+    }`;
 
     const response = await groq.chat.completions.create({
-      messages: [
-        { role:"system", content:`You are a multilingual restaurant content engine. Target language: ${targetLanguage}. All text fields must be perfectly localized in ${targetLanguage} script.` },
-        { role:"user",   content: prompt }
-      ],
-      model: "llama-3.1-70b-versatile",
-      temperature: 0.1,
-      response_format: { type: "json_object" }
+      messages: [{ role: "user", content: prompt }],
+      model: "openai/gpt-oss-120b",
+      response_format: { type: "json_object" },
+      temperature: 0.3,
+      max_tokens: 1000
     });
 
     const parsed = JSON.parse(response.choices[0]?.message?.content || "{}");
-    const aiCategory = forcedCategory || parsed.detectedCategory || "Main Course";
-    const englishCategory = aiCategory === "Beverage" ? "Beverages"
-      : aiCategory === "Dessert" ? "Desserts"
-      : aiCategory === "Starter" ? "Starters"
-      : parsed.category || "Main Course";
-
+    const aiCategory = parsed.detectedCategory || forcedCategory || "Main Course";
+    
+    let finalCategory = aiCategory === "Beverage" ? "Beverages" : aiCategory === "Dessert" ? "Desserts" : aiCategory === "Starter" ? "Starters" : parsed.category || "Main Course";
     const variations = parsed.variations || {};
 
-    const ensureFive = (arr, fallbacks) => {
-      const safe = Array.isArray(arr) ? arr.filter(Boolean) : [];
-      while (safe.length < 5) safe.push(fallbacks[safe.length % fallbacks.length]);
-      return safe.slice(0, 5);
-    };
+    const suggShortName      = ensureFive(variations.shortName, fbShortName);
+    const suggCuisine        = ensureFive(variations.cuisine, fbCuisine);
+    const suggFoodType       = ensureFive(variations.foodType, fbFoodType);
 
-    const finalProfile = {
-      shortName:       parsed.shortName      || dishName,
-      description:     parsed.description    || `Delicious ${englishName} prepared fresh.`,
-      category:        englishCategory,
-      menuGroup:       parsed.menuGroup      || (isBeverage ? "Beverages" : aiCategory === "Dessert" ? "Desserts" : "Main Course"),
-      cuisine:         parsed.cuisine        || "North Indian",
-      foodType:        parsed.foodType       || "Vegetarian",
-      classification:  parsed.classification || "Best Seller",
-      uom:             parsed.uom            || defaultUom,
-      prepTime:        parsed.prepTime       || "15 mins",
-      price:           parsed.price          || `Rs. ${basePrice}`,
-      tax:             parsed.tax            || defaultTax,
+    const suggDescription = ensureFive(variations.description, [
+      `Delicious ${englishName} prepared fresh.`,
+      `Classic ${englishName} — a crowd favourite.`,
+      `Premium ${englishName} crafted with care.`,
+      `Authentic ${englishName} — must try!`,
+      `Signature ${englishName} from our kitchen.`
+    ]);
+    const suggMenuGroup = ensureFive(variations.menuGroup, isLiquor ? ["Bar Menu","Alcoholic","Spirits","Premium Bar","Cocktails"] : isBeverage ? ["Beverages","Cold Drinks","Hot Drinks","Fresh Drinks","Mocktails"] : forcedCategory === "Dessert" ? ["Desserts","Indian Sweets","Ice Creams","Western Desserts","Pastries"] : forcedCategory === "Starter" ? ["Starters","Appetizers","Tandoor","Snacks","Kebabs"] : ["Main Course","Curries & Gravies","Chef's Special","Rice & Biryani","Signature Dishes"]);
+    const suggClassification = ensureFive(variations.classification, ["Best Seller","Chef's Special","Must Try","Trending","New Arrival"]);
+
+    const catFallback = isLiquor ? ["Beverages","Bar Menu","Spirits","Cocktails","Chef's Special"] : forcedCategory === "Dessert" ? ["Desserts","Pastries","Chef's Special","Ice Creams","Main Course"] : forcedCategory === "Starter" ? ["Starters","Appetizers","Chef's Special","Main Course","Beverages"] : ["Main Course","Chef's Special","Trending Items","Starters","Desserts"];
+    const suggCategory = ensureFive(variations.category, catFallback);
+
+    const profile = {
+      dishName:        dishName,
+      shortName:       parsed.shortName || suggShortName[0],
+      description:     parsed.description || suggDescription[0],
+      category:        finalCategory,
+      menuGroup:       parsed.menuGroup || suggMenuGroup[0],
+      cuisine:         parsed.cuisine || suggCuisine[0],
+      foodType:        parsed.foodType || suggFoodType[0],
+      classification:  parsed.classification || suggClassification[0],
+      uom:             parsed.uom || uomVariants[0],
+      prepTime:        parsed.prepTime || prepTimeVariants[0],
+      price:           parsed.price || priceVariants[0],
+      tax:             parsed.tax || taxVariants[0],
       image:           finalImageUrls[0],
       detectedLanguage: targetLanguage,
       suggestions: {
-        shortName:      ensureFive(variations.shortName,      [dishName,`${dishName} Special`,`Premium ${dishName}`,`Classic ${dishName}`,`Signature ${dishName}`]),
-        description:    ensureFive(variations.description,    ["Freshly prepared.","Traditional recipe.","Chef's special blend.","Premium quality dish.","House favourite."]),
-        category:       ["Beverages","Desserts","Starters","Main Course","Chef's Special"],
-        menuGroup:      ensureFive(variations.menuGroup,      ["Main Course","Starters","Beverages","Desserts","Chef Special"]),
-        cuisine:        ensureFive(variations.cuisine,        ["North Indian","South Indian","Mughlai","Indo-Chinese","Continental"]),
-        foodType:       ensureFive(variations.foodType,       ["Vegetarian","Non-Vegetarian","Vegan","Eggetarian","Jain"]),
-        classification: ensureFive(variations.classification, ["Best Seller","Chef Special","Trending","Popular","New Arrival"]),
-        uom:            uomVariants,
-        prepTime:       ["5 mins","10 mins","15 mins","20 mins","25 mins"],
-        price:          priceVariants,
-        tax:            ensureFive(variations.tax,            taxVariants),
+        shortName:      suggShortName,
+        description:    suggDescription,
+        category:       suggCategory,
+        menuGroup:      suggMenuGroup,
+        cuisine:        suggCuisine,
+        foodType:       suggFoodType,
+        classification: suggClassification,
+        uom:            ensureFive(variations.uom, uomVariants),
+        prepTime:       ensureFive(variations.prepTime, prepTimeVariants),
+        price:          ensureFive(variations.price, priceVariants),
+        tax:            ensureFive(variations.tax, taxVariants),
         image:          finalImageUrls,
       }
     };
 
-    // Strict rule adjustment for liquor items: wipe suggestions array to hide choices while keeping accept action functional
-    if (isLiquor) {
-      finalProfile.suggestions = {
-        shortName: [], description: [], category: [], menuGroup: [],
-        cuisine: [], foodType: [], classification: [], uom: [],
-        prepTime: [], price: [], tax: [], image: finalImageUrls
-      };
+    // ───────────────────────────────────────────────────────────────────────────
+    // HARD RUNTIME OVERRIDES — PREVENTS AI LAPSES AND DRIFT
+    // ───────────────────────────────────────────────────────────────────────────
+    
+    // Override 1: Fix Butter Chicken (and Indian Curries) Main Course placement & grouping
+    if (lowerName.includes("butter chicken") || lowerName.includes("curry") || lowerName.includes("makhani") || rawLower.includes("butter chicken")) {
+      profile.category = "Main Course";
+      profile.menuGroup = translatedMainCourseGroup;
+      if (!profile.suggestions.category.includes("Main Course")) {
+        profile.suggestions.category[0] = "Main Course";
+      }
+      profile.suggestions.menuGroup[0] = translatedMainCourseGroup;
     }
 
-    return res.json(finalProfile);
+    // Override 2: Fix Ice Cream category leak from matching 'cola' inside 'chocolate'
+    if (lowerName.includes("ice cream") || lowerName.includes("kulfi") || rawLower.includes("ice cream")) {
+      profile.category = "Desserts";
+      if (!profile.suggestions.category.includes("Desserts")) {
+        profile.suggestions.category[0] = "Desserts";
+      }
+    }
 
-  } catch (error) {
-    console.error("Suggest-all error:", error.message);
+    // Override 3: Force complete Non-Vegetarian tag generation for known non-veg items
+    if ((trueNonVegKeywords.some(k => lowerName.includes(k)) || trueNonVegKeywords.some(k => rawLower.includes(k))) && !lowerName.includes("paneer")) {
+      profile.foodType = translatedNonVeg;
+      profile.menuGroup = translatedNonVegGroup;
+      profile.suggestions.menuGroup[0] = translatedNonVegGroup;
+      profile.suggestions.foodType = [
+        translatedNonVeg,
+        await translateTerm("Egg / Meat", targetLanguage),
+        await translateTerm("Halal Certified", targetLanguage),
+        await translateTerm("High Protein", targetLanguage),
+        await translateTerm("Non-Veg Special", targetLanguage)
+      ];
+    }
+
+    return res.json(profile);
+
+  } catch (err) {
+    console.error("Core engine specifications exception:", err.message);
+
+    const fbDescription = isLiquor 
+      ? [`Premium ${dishName} served chilled.`,`Smooth ${dishName} for a perfect evening.`,`Classic ${dishName} — a bar favourite.`,`Expertly crafted ${dishName}.`,`${dishName} — on the rocks or neat.`] 
+      : [`Delicious ${dishName} prepared fresh.`,`Classic ${dishName} — a crowd favourite.`,`Premium ${dishName} crafted with care.`,`Authentic ${dishName} — must try!`,`Signature ${dishName} from our kitchen.`];
+
+    const fbMenuGroup = isLiquor ? ["Bar Menu","Alcoholic","Spirits","Premium Bar","Cocktails"] : isBeverage ? ["Beverages","Cold Drinks","Hot Drinks","Fresh Drinks","Mocktails"] : forcedCategory === "Dessert" ? ["Desserts","Indian Sweets","Ice Creams","Western Desserts","Pastries"] : forcedCategory === "Starter" ? ["Starters","Appetizers","Tandoor","Snacks","Kebabs"] : ["Main Course","Curries & Gravies","Chef's Special","Rice & Biryani","Signature Dishes"];
+    const fbClassification = ["Best Seller","Chef's Special","Must Try","Trending","New Arrival"];
+    const fbCategoryChips = isLiquor ? ["Beverages","Bar Menu","Spirits","Cocktails","Chef's Special"] : forcedCategory === "Dessert" ? ["Desserts","Pastries","Chef's Special","Ice Cream","Main Course"] : forcedCategory === "Starter" ? ["Starters","Appetizers","Chef's Special","Main Course","Beverages"] : ["Main Course","Chef's Special","Trending Items","Starters","Desserts"];
+
+    // Translate fallback text fields into the target language (category stays English by design)
+    const [fbDescriptionT, fbMenuGroupT, fbClassificationT] = await Promise.all([
+      Promise.all(fbDescription.map(d => translateTerm(d, targetLanguage))),
+      Promise.all(fbMenuGroup.map(g => translateTerm(g, targetLanguage))),
+      Promise.all(fbClassification.map(c => translateTerm(c, targetLanguage)))
+    ]);
+
     const fallbackProfile = {
-      shortName: dishName, description: `Delicious ${englishName} prepared fresh.`,
-      category: "Main Course", menuGroup: "Main Course", cuisine: "North Indian",
-      foodType: "Vegetarian", classification: "Popular", uom: defaultUom,
-      prepTime: "15 mins", price: `Rs. ${basePrice}`, tax: defaultTax,
-      image: finalImageUrls[0],
+      dishName:        dishName,
+      shortName:       fbShortName[0],
+      description:     fbDescriptionT[0],
+      category:        forcedCategory ? (forcedCategory === "Beverage" ? "Beverages" : forcedCategory === "Dessert" ? "Desserts" : forcedCategory === "Starter" ? "Starters" : "Main Course") : "Main Course",
+      menuGroup:       fbMenuGroupT[0],
+      cuisine:         fbCuisine[0],
+      foodType:        fbFoodType[0],
+      classification:  fbClassificationT[0],
+      uom:             uomVariants[0],
+      prepTime:        prepTimeVariants[0],
+      price:           priceVariants[0],
+      tax:             taxVariants[0],
+      image:           finalImageUrls[0],
       detectedLanguage: targetLanguage,
       suggestions: {
-        shortName:      [dishName,`${dishName} Special`,`Premium ${dishName}`,`Classic ${dishName}`,`Signature ${dishName}`],
-        description:    ["Freshly prepared.","Traditional recipe.","Chef special.","Premium quality.","House favourite."],
-        category:       ["Beverages","Desserts","Starters","Main Course","Chef's Special"],
-        menuGroup:      ["Main Course","Starters","Beverages","Desserts","Chef Special"],
-        cuisine:        ["North Indian","South Indian","Mughlai","Indo-Chinese","Continental"],
-        foodType:       ["Vegetarian","Non-Vegetarian","Vegan","Eggetarian","Jain"],
-        classification: ["Best Seller","Chef Special","Trending","Popular","New Arrival"],
+        shortName:      fbShortName,
+        description:    fbDescriptionT,
+        category:       fbCategoryChips,
+        menuGroup:      fbMenuGroupT,
+        cuisine:        fbCuisine,
+        foodType:       fbFoodType,
+        classification: fbClassificationT,
         uom:            uomVariants,
-        prepTime:       ["5 mins","10 mins","15 mins","20 mins","25 mins"],
+        prepTime:       ensureFive(null, prepTimeVariants),
         price:          priceVariants,
         tax:            taxVariants,
         image:          finalImageUrls,
       }
     };
-
-    if (isLiquor) {
-      fallbackProfile.suggestions = {
-        shortName: [], description: [], category: [], menuGroup: [],
-        cuisine: [], foodType: [], classification: [], uom: [],
-        prepTime: [], price: [], tax: [], image: finalImageUrls
-      };
+    
+    // Match fallback rules too
+    if (lowerName.includes("butter chicken") || rawLower.includes("butter chicken")) {
+      fallbackProfile.category = "Main Course";
+      fallbackProfile.menuGroup = translatedMainCourseGroup;
+      fallbackProfile.suggestions.category[0] = "Main Course";
+      fallbackProfile.suggestions.menuGroup[0] = translatedMainCourseGroup;
     }
+
+    if ((trueNonVegKeywords.some(k => lowerName.includes(k)) || trueNonVegKeywords.some(k => rawLower.includes(k))) && !lowerName.includes("paneer")) {
+      fallbackProfile.foodType = translatedNonVeg;
+      fallbackProfile.menuGroup = translatedNonVegGroup;
+      fallbackProfile.suggestions.foodType[0] = translatedNonVeg;
+      fallbackProfile.suggestions.menuGroup[0] = translatedNonVegGroup;
+    }
+
     return res.json(fallbackProfile);
   }
 });
@@ -598,14 +724,10 @@ app.post("/decision", (req, res) => {
 });
 
 
-
-
-
-
 // Local dev: listen; Vercel: export
 if (require.main === module) {
   const PORT = process.env.PORT || 5000;
-  app.listen(PORT, () => console.log(`Server running on http://localhost:${PORT}`));
+  app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
+} else {
+  module.exports = app;
 }
-// Vercel serverless handler
-module.exports = (req, res) => app(req, res);
